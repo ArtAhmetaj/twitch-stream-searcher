@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 )
 
 func main() {
-	channels, err := getTwitchChannels("football match")
+
+	channels, err := getTwitchChannels("big brother")
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
 	}
 	fmt.Println(channels)
 }
