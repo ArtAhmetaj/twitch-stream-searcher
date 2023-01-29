@@ -18,7 +18,7 @@ var (
 
 type TwitchChannel struct {
 	displayName string
-	followers   int32
+	followers   int
 	channelLink string
 }
 
@@ -58,14 +58,15 @@ func parseEdges(response map[string]interface{}) ([]TwitchChannelEdge, error) {
 	return items, nil
 }
 
-func GetTwitchChannels(edges []TwitchChannelEdge) []TwitchChannel {
-	var twitchChannels []TwitchChannel
+func GetTwitchChannels(edges []TwitchChannelEdge) map[TwitchChannel]bool {
+	twitchChannels := map[TwitchChannel]bool{}
 	for _, e := range edges {
-		twitchChannels = append(twitchChannels, TwitchChannel{
+		channel := TwitchChannel{
 			displayName: e.DisplayName,
-			followers:   int32(e.Followers.TotalCount),
+			followers:   e.Followers.TotalCount,
 			channelLink: formatTwitchLinkByName(e.DisplayName),
-		})
+		}
+		twitchChannels[channel] = true
 	}
 	return twitchChannels
 }
@@ -114,7 +115,17 @@ func newTwitchChannelSearchRequest(searchValue string) TwitchChannelSearchReques
 	}
 }
 
-func getTwitchChannels(searchValue string) ([]TwitchChannel, error) {
+type TwitchClient struct {
+	httpClient *http.Client
+}
+
+func NewTwitchClient() TwitchClient {
+	return TwitchClient{
+		httpClient: &http.Client{},
+	}
+}
+
+func (tc TwitchClient) getTwitchChannels(searchValue string) (map[TwitchChannel]bool, error) {
 	requestBody := newTwitchChannelSearchRequest(searchValue)
 	body, err := json.Marshal(requestBody)
 	if err != nil {
@@ -127,9 +138,8 @@ func getTwitchChannels(searchValue string) ([]TwitchChannel, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{}
 
-	response, err := client.Do(req)
+	response, err := tc.httpClient.Do(req)
 
 	body, err = ioutil.ReadAll(response.Body)
 	if err != nil {

@@ -24,7 +24,7 @@ const (
 
 type BrowserAutomater interface {
 	StartSession(browser Browser) error
-	SelectAndOpenTabs(urls []string) error
+	SelectAndOpenTabs(mainUrl string, candidateUrls []string) error
 	ReplaceTab(url string) error
 	EndSession() error
 }
@@ -61,15 +61,20 @@ func (s *SeleniumBrowserAutomater) StartSession(browser Browser) error {
 	return nil
 }
 
-func (s *SeleniumBrowserAutomater) SelectAndOpenTabs(urls []string) error {
+func (s *SeleniumBrowserAutomater) SelectAndOpenTabs(mainCandidate string, candidateUrls []string) error {
 
-	for _, u := range urls {
+	err := s.webDriver.Get(mainCandidate)
+	if err != nil {
+		return err
+	}
+
+	for _, u := range candidateUrls {
 		err := s.webDriver.Get(u)
 		if err != nil {
 			return err
 		}
 	}
-	err := s.webDriver.SwitchWindow(urls[0])
+	err = s.webDriver.SwitchWindow(mainCandidate)
 	if err != nil {
 		return err
 	}
