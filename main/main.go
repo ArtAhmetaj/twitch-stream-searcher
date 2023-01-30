@@ -31,8 +31,9 @@ func main() {
 	for k := range channels {
 		links = append(links, k.channelLink)
 	}
-
-	err = seleniumBrowserAutomater.SelectAndOpenTabs(links[0], links[1:])
+	candidateLink := links[0]
+	links = links[1:]
+	err = seleniumBrowserAutomater.SelectAndOpenTabs(candidateLink, links)
 	if err != nil {
 		return
 	}
@@ -45,7 +46,21 @@ func main() {
 		}
 
 		switch char {
-		case 'n': // select new tab
+		case 'n':
+			if len(links) == 0 {
+				//TODO: getChannels again and then refresh link list
+				fmt.Println("Could not find any more channels")
+				os.Exit(1)
+			}
+			newCandidateLink := links[0]
+			links = links[1:]
+			err := seleniumBrowserAutomater.ReplaceTab(newCandidateLink)
+			if err != nil {
+				return
+			}
+
+		case 'z':
+			os.Exit(0)
 		}
 	}
 }
