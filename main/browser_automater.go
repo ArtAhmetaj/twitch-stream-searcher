@@ -18,8 +18,9 @@ func (b Browser) String() string {
 }
 
 const (
-	seleniumPath = "./selenium-server-4.8.0.jar"
-	port         = 8080
+	seleniumPath    = "selenium-server-standalone-3.5.3.jar"
+	port            = 8080
+	geckoDriverPath = "geckodriver.exe"
 )
 
 type BrowserAutomater interface {
@@ -40,10 +41,12 @@ func NewSeleniumBrowserAutomater() *SeleniumBrowserAutomater {
 func startSeleniumService() error {
 	//TODO: add firefox integration through gecko driver
 	opts := []selenium.ServiceOption{
-		//selenium.StartFrameBuffer(), // Start an X frame buffer for the browser to run in.
+		selenium.ChromeDriver("chromedriver.exe"),
+		//selenium.GeckoDriver(geckoDriverPath), // Specify the path to GeckoDriver in order to use Firefox.
 		selenium.Output(os.Stderr), // Output debug information to STDERR.
 	}
 	_, err := selenium.NewSeleniumService(seleniumPath, port, opts...)
+
 	return err
 }
 
@@ -57,28 +60,31 @@ func (s *SeleniumBrowserAutomater) StartSession(browser Browser) error {
 	wd, err := selenium.NewRemote(capabilities, fmt.Sprintf("http://localhost:%d/wd/hub", port))
 
 	s.webDriver = wd
-
-	return nil
+	return err
 }
 
-func (s *SeleniumBrowserAutomater) SelectAndOpenTabs(mainCandidate string, candidateUrls []string) error {
+func (s *SeleniumBrowserAutomater) SelectAndOpenTabs(mainCandidate string, candidateUrls []string, limit int) error {
 
 	err := s.webDriver.Get(mainCandidate)
 	if err != nil {
 		return err
 	}
-
-	for _, u := range candidateUrls {
-		err := s.webDriver.Get(u)
-		if err != nil {
-			return err
-		}
-	}
-	err = s.webDriver.SwitchWindow(mainCandidate)
+	handle, err := s.webDriver.CurrentWindowHandle()
 	if err != nil {
 		return err
 	}
-	return nil
+
+	for i, u := range candidateUrls {
+		_, err := s.webDriver.ExecuteScript(fmt.Sprintf("window.open('%q','_blank');", u), nil)
+		if err != nil {
+			return err
+		}
+		if i >= limit {
+			break
+		}
+	}
+	err = s.webDriver.SwitchWindow(handle)
+	return err
 }
 
 func (s *SeleniumBrowserAutomater) ReplaceTab(url string) error {
