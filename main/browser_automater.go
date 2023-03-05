@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/tebeka/selenium"
-	"os"
 )
 
 type Browser int
@@ -26,7 +25,8 @@ const (
 type BrowserAutomater interface {
 	StartSession(browser Browser) error
 	SelectAndOpenTabs(mainUrl string, candidateUrls []string) error
-	ReplaceTab(url string) error
+	DoesVideoExistInPage() bool
+	CloseCurrentTab() error
 	EndSession() error
 }
 
@@ -43,10 +43,14 @@ func startSeleniumService() error {
 	opts := []selenium.ServiceOption{
 		selenium.ChromeDriver("chromedriver.exe"),
 		//selenium.GeckoDriver(geckoDriverPath), // Specify the path to GeckoDriver in order to use Firefox.
-		selenium.Output(os.Stderr), // Output debug information to STDERR.
 	}
 	_, err := selenium.NewSeleniumService(seleniumPath, port, opts...)
 
+	return err
+}
+
+func (s *SeleniumBrowserAutomater) openNewTab(url string) error {
+	_, err := s.webDriver.ExecuteScript(fmt.Sprintf("window.open(%q,'_blank');", url), nil)
 	return err
 }
 
@@ -75,28 +79,38 @@ func (s *SeleniumBrowserAutomater) SelectAndOpenTabs(mainCandidate string, candi
 	}
 
 	for i, u := range candidateUrls {
-		_, err := s.webDriver.ExecuteScript(fmt.Sprintf("window.open('%q','_blank');", u), nil)
+		err = s.openNewTab(u)
 		if err != nil {
 			return err
 		}
-		if i >= limit {
+		if i+1 >= limit {
 			break
 		}
 	}
 	err = s.webDriver.SwitchWindow(handle)
+	if err != nil {
+		return err
+	}
+	err = s.webDriver.MaximizeWindow(handle)
 	return err
 }
 
-func (s *SeleniumBrowserAutomater) ReplaceTab(url string) error {
+func (s *SeleniumBrowserAutomater) CloseCurrentTab() error {
 	err := s.webDriver.Close()
 	if err != nil {
 		return err
 	}
-	err = s.webDriver.SwitchWindow(url)
+	handles, err := s.webDriver.WindowHandles()
 	if err != nil {
 		return err
 	}
-	return nil
+	return s.webDriver.SwitchWindow(handles[0])
+}
+
+func (s *SeleniumBrowserAutomater) DoesVideoExistInPage() bool {
+	_, err := s.webDriver.FindElement(selenium.ByTagName, "video")
+	fmt.Println(err)
+	return err == nil
 }
 
 func (s *SeleniumBrowserAutomater) EndSession() error {

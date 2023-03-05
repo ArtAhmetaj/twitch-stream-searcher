@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"time"
+)
+
+var (
+	connectionsLimit = 10
 )
 
 func main() {
 	twitchClient := NewTwitchClient()
 	seleniumBrowserAutomater := NewSeleniumBrowserAutomater()
-	defer seleniumBrowserAutomater.EndSession()
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Print("Enter text to search for on twitch: ")
@@ -39,48 +43,50 @@ func main() {
 		return
 	}
 
-	err = seleniumBrowserAutomater.SelectAndOpenTabs(candidateLink, links, 10)
+	err = seleniumBrowserAutomater.SelectAndOpenTabs(candidateLink, links, connectionsLimit)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	for {
-		char, _, err := reader.ReadRune()
+	ticker := time.NewTicker(5 * time.Second)
+	quit := make(chan struct{})
 
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println("Possible args: \nn=Switch to new channel when the channel breaks\nz=stop execution")
-		switch char {
-		case 'n':
-			if len(links) == 0 {
-				channels, err = twitchClient.getTwitchChannels(input)
-				links = getLinks(channels)
+	for {
+		select {
+		case <-ticker.C:
+			videoPlaying := seleniumBrowserAutomater.DoesVideoExistInPage()
+			if !videoPlaying {
+				if len(links) == 0 {
+					err = seleniumBrowserAutomater.EndSession()
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+					fmt.Println("No more links available")
+					return
+				}
+				candidateLink = links[0]
+				links = links[1:]
+				err = seleniumBrowserAutomater.CloseCurrentTab()
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
 			}
-			if len(links) == 0 {
-				fmt.Println("No links available")
-				return
-			}
-			newCandidateLink := links[0]
-			links = links[1:]
-			err := seleniumBrowserAutomater.ReplaceTab(newCandidateLink)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			break
-		case 'z':
-			os.Exit(0)
+		case <-quit:
+			ticker.Stop()
+			return
 		}
 	}
+
 }
 
-func getLinks(channels map[TwitchChannel]bool) []string {
+func getLinks(channels []TwitchChannel) []string {
 
 	var links []string
-	for k := range channels {
-		links = append(links, k.channelLink)
+	for _, v := range channels {
+		links = append(links, v.channelLink)
 	}
 
 	return links

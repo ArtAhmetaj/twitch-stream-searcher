@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 )
 
 //TODO: check on generating these variables, take them through the webdriver if pure http requests will not cut it
@@ -37,6 +38,20 @@ type TwitchChannelEdge struct {
 		ID       string `json:"id"`
 		Typename string `json:"__typename"`
 	} `json:"channel"`
+	Stream *Stream `json:"stream"`
+}
+
+type Stream struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	ViewersCount int    `json:"viewersCount"`
+	Typename     string `json:"__typename"`
+}
+
+type FreeformTag struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Typename string `json:"__typename"`
 }
 
 func parseEdges(response map[string]interface{}) ([]TwitchChannelEdge, error) {
@@ -58,17 +73,31 @@ func parseEdges(response map[string]interface{}) ([]TwitchChannelEdge, error) {
 	return items, nil
 }
 
-func GetTwitchChannels(edges []TwitchChannelEdge) map[TwitchChannel]bool {
+func sortSliceFromSet(channels map[TwitchChannel]bool) []TwitchChannel {
+	var channelsSlice []TwitchChannel
+	for k := range channels {
+		channelsSlice = append(channelsSlice, k)
+	}
+	sort.Slice(channelsSlice, func(i, j int) bool {
+		return channelsSlice[i].followers > channelsSlice[j].followers
+	})
+	return channelsSlice
+}
+
+func GetTwitchChannels(edges []TwitchChannelEdge) []TwitchChannel {
 	twitchChannels := map[TwitchChannel]bool{}
 	for _, e := range edges {
-		channel := TwitchChannel{
-			displayName: e.DisplayName,
-			followers:   e.Followers.TotalCount,
-			channelLink: formatTwitchLinkByName(e.DisplayName),
+		if e.Stream != nil {
+			channel := TwitchChannel{
+				displayName: e.DisplayName,
+				followers:   e.Followers.TotalCount,
+				channelLink: formatTwitchLinkByName(e.DisplayName),
+			}
+			twitchChannels[channel] = true
 		}
-		twitchChannels[channel] = true
+
 	}
-	return twitchChannels
+	return sortSliceFromSet(twitchChannels)
 }
 
 type TwitchChannelSearchRequest struct {
@@ -125,7 +154,7 @@ func NewTwitchClient() TwitchClient {
 	}
 }
 
-func (tc TwitchClient) getTwitchChannels(searchValue string) (map[TwitchChannel]bool, error) {
+func (tc TwitchClient) getTwitchChannels(searchValue string) ([]TwitchChannel, error) {
 	requestBody := newTwitchChannelSearchRequest(searchValue)
 	body, err := json.Marshal(requestBody)
 	if err != nil {
